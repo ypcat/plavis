@@ -76,9 +76,23 @@ jobs:
           git add data/pla_activity.csv index.html
           if git diff --cached --quiet; then
             echo "no changes"
-          else
-            git commit -m "data: update $(date -u +%F)"
-            for i in 1 2 3 4; do
-              git push && break || sleep $((2 ** i))
-            done
+            exit 0
           fi
+          git commit -m "data: update $(date -u +%F)"
+          for i in 1 2 3 4 5; do
+            if git push origin HEAD:main; then
+              echo "push succeeded on attempt $i"
+              exit 0
+            fi
+            echo "push rejected on attempt $i; rebasing onto origin/main"
+            git fetch origin main
+            # preserve our one commit on top of whatever landed upstream
+            git rebase origin/main || {
+              echo "::error::rebase failed; aborting"
+              git rebase --abort || true
+              exit 1
+            }
+            sleep $((2 ** i))
+          done
+          echo "::error::could not push after 5 attempts"
+          exit 1
