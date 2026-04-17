@@ -17,10 +17,13 @@ built from the Ministry of National Defense (R.O.C.) daily bulletins at
 ## Quick start
 
 ```bash
-pip install -r requirements.txt
+uv pip install -r requirements.txt   # or: uv run --with requests --with beautifulsoup4 update.py ...
 python update.py --since 2026-04-01
 open index.html
 ```
+
+(Install `uv` with `curl -LsSf https://astral.sh/uv/install.sh | sh` or
+`brew install uv`.)
 
 ### CLI flags
 
