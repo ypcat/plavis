@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>PLA Activity around Taiwan — plavis</title>
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<script src="https://cdn.plot.ly/plotly-2.35.2.min.js" charset="utf-8"></script>
+<style>
+  :root { color-scheme: light dark; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue",
+                 Arial, "Noto Sans", "PingFang TC", "Microsoft JhengHei", sans-serif;
+    margin: 0; padding: 1.25rem 1.5rem 3rem; max-width: 1280px; margin-inline: auto;
+    background: #0f1115; color: #e6e8ec;
+  }
+  h1 { font-size: 1.4rem; margin: 0 0 .25rem; }
+  p.sub { color: #8a93a6; margin: 0 0 1.25rem; font-size: .92rem; }
+  .card { background: #171a21; border: 1px solid #242935; border-radius: 10px;
+          padding: .75rem .75rem 1rem; margin-bottom: 1rem; }
+  .card h2 { font-size: 1.05rem; margin: .15rem .25rem .6rem; }
+  footer { margin-top: 1.5rem; color: #6c7386; font-size: .82rem; }
+  a { color: #6ea8ff; }
+  @media (prefers-color-scheme: light) {
+    body { background: #f8f9fb; color: #1a1d24; }
+    .card { background: #fff; border-color: #e2e6ef; }
+    p.sub { color: #556; }
+    footer { color: #667; }
+  }
+</style>
+</head>
+<body>
+<h1>PLA activity around Taiwan</h1>
+<p class="sub">
+  Daily counts from the Taiwan MND bulletin.
+  0 days of data ·
+  latest — ·
+  generated 2026-04-17 07:31 UTC.
+</p>
+
+<div class="card"><h2>Daily totals</h2><div id="totals" style="height:460px"></div></div>
+<div class="card"><h2>Aircraft by type (best-effort OCR)</h2><div id="types" style="height:460px"></div></div>
+
+<footer>
+  Source:
+  <a href="https://www.mnd.gov.tw/news/plaactlist/1" target="_blank" rel="noopener">
+    mnd.gov.tw · PLA Activities
+  </a>.
+  Type-level counts come from OCR of the attached infographic and are
+  best-effort; top-line totals are parsed from the bulletin text.
+  Code: <a href="https://github.com/ypcat/plavis" target="_blank" rel="noopener">ypcat/plavis</a>.
+</footer>
+
+<script id="csv-data" type="text/plain">date,source_id,total_aircraft,median_crossings,sw_adiz,n_adiz,e_adiz,se_adiz,plan_vessels,official_ships
+</script>
+<script>
+(function () {
+  const csv = document.getElementById('csv-data').textContent;
+
+  function parseCSV(text) {
+    const lines = text.replace(/\r/g, '').split('\n').filter(l => l.length);
+    const header = lines.shift().split(',');
+    return lines.map(line => {
+      const cols = line.split(',');
+      const row = {};
+      header.forEach((h, i) => { row[h] = cols[i] ?? ''; });
+      return row;
+    });
+  }
+  function asNum(v) { if (v === '' || v == null) return null; const n = +v; return Number.isFinite(n) ? n : null; }
+
+  const rows = parseCSV(csv);
+  const dates = rows.map(r => r.date);
+  const headerCols = Object.keys(rows[0] || {});
+
+  const totalSeries = [
+    ['total_aircraft', 'All PLA aircraft'],
+    ['median_crossings', 'Crossed median line'],
+    ['plan_vessels', 'PLAN vessels'],
+    ['official_ships', 'Official ships'],
+  ];
+
+  const totalsData = totalSeries
+    .filter(([k]) => headerCols.includes(k))
+    .map(([k, name]) => ({
+      x: dates,
+      y: rows.map(r => asNum(r[k])),
+      type: 'scatter', mode: 'lines+markers',
+      name, connectgaps: false,
+      hovertemplate: '%{x}<br>' + name + ': %{y}<extra></extra>',
+    }));
+
+  const rangeSelector = {
+    buttons: [
+      { step: 'day',   stepmode: 'backward', count: 7,  label: '7d' },
+      { step: 'day',   stepmode: 'backward', count: 30, label: '30d' },
+      { step: 'day',   stepmode: 'backward', count: 90, label: '90d' },
+      { step: 'year',  stepmode: 'backward', count: 1,  label: '1y' },
+      { step: 'all',   label: 'all' },
+    ],
+  };
+
+  const layoutBase = {
+    paper_bgcolor: 'rgba(0,0,0,0)',
+    plot_bgcolor: 'rgba(0,0,0,0)',
+    font: { color: getComputedStyle(document.body).color },
+    margin: { l: 50, r: 20, t: 10, b: 70 },
+    legend: { orientation: 'h', y: -0.25 },
+    xaxis: { type: 'date', rangeselector: rangeSelector, rangeslider: { visible: true } },
+    hovermode: 'x unified',
+  };
+
+  Plotly.newPlot('totals', totalsData, { ...layoutBase }, { responsive: true, displaylogo: false });
+
+  const typeCols = headerCols.filter(c => c.startsWith('type_'));
+  const typeData = typeCols.map(c => ({
+    x: dates,
+    y: rows.map(r => asNum(r[c])),
+    stackgroup: 'one',
+    type: 'scatter', mode: 'lines',
+    name: c.replace(/^type_/, ''),
+    hovertemplate: '%{x}<br>' + c.replace(/^type_/, '') + ': %{y}<extra></extra>',
+  }));
+
+  if (typeData.length === 0) {
+    document.getElementById('types').innerHTML =
+      '<p style="color:#8a93a6;padding:.75rem">No per-type data yet — run <code>python update.py</code> with OCR enabled to populate this chart.</p>';
+  } else {
+    Plotly.newPlot('types', typeData, { ...layoutBase }, { responsive: true, displaylogo: false });
+  }
+})();
+</script>
+</body>
+</html>
