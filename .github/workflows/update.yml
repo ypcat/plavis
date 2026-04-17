@@ -53,10 +53,21 @@ jobs:
         env:
           OCR_BACKEND: ${{ vars.OCR_BACKEND || 'paddle' }}
         run: |
-          args=""
+          args="--verbose"
           if [ "${{ inputs.full }}" = "true" ]; then args="$args --full"; fi
           if [ "${{ inputs.no_ocr }}" = "true" ]; then args="$args --no-ocr"; fi
-          python update.py $args
+          python update.py $args 2>&1 | tee update.log
+
+      - name: Upload debug artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: crawler-debug-${{ github.run_id }}
+          path: |
+            debug/
+            update.log
+          if-no-files-found: ignore
+          retention-days: 14
 
       - name: Commit + push if changed
         run: |

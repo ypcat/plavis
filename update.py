@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import argparse
 import logging
+import os
 import sys
 import time
 from datetime import date, datetime
@@ -35,8 +36,19 @@ def _parse_args() -> argparse.Namespace:
     p.add_argument("--ocr-backend", choices=["paddle", "tesseract"], default=None)
     p.add_argument("--max-pages", type=int, default=500)
     p.add_argument("--dry-run", action="store_true", help="don't write CSV/HTML")
+    p.add_argument("--debug-dump", type=Path, default=None,
+                   help="directory to dump raw HTML of empty/failed pages")
     p.add_argument("-v", "--verbose", action="store_true")
     return p.parse_args()
+
+
+def _write_step_summary(lines: list[str]) -> None:
+    """Write a block to $GITHUB_STEP_SUMMARY when running under Actions."""
+    summary_path = os.environ.get("GITHUB_STEP_SUMMARY")
+    if not summary_path:
+        return
+    with open(summary_path, "a", encoding="utf-8") as f:
+        f.write("\n".join(lines) + "\n")
 
 
 def _parse_date(s: str) -> date:
@@ -71,6 +83,16 @@ def main() -> int:
     floor = args.earliest
     if args.since and (floor is None or args.since > floor):
         floor = args.since
+
+    # Enable dump-on-empty. In CI we always dump so the next run has evidence.
+    dump_dir = args.debug_dump
+    if dump_dir is None and os.environ.get("GITHUB_ACTIONS") == "true":
+        dump_dir = ROOT / "debug"
+    if dump_dir is not None:
+        crawler.DEBUG_DUMP_DIR = dump_dir
+
+    log.info("existing rows: %d; known ids: %d; floor: %s; ocr: %s",
+             len(df), len(known_ids), floor, "off" if args.no_ocr else "on")
 
     session = crawler.new_session()
 
@@ -122,11 +144,21 @@ def main() -> int:
     store.save_csv(df2, CSV_PATH)
     render.build_html(df2, HTML_PATH)
 
+    summary = [
+        "### plavis update summary",
+        f"- existing rows: **{len(df)}**",
+        f"- entries crawled this run: **{seen}**",
+        f"- new/updated rows this run: **{len(new_rows)}**",
+    ]
     if len(new_rows) == 0:
-        log.info("no new rows; CSV/HTML regenerated")
+        summary.append("- :warning: no new rows (see `debug/` artifact if in CI)")
+        log.warning("no new rows; CSV/HTML regenerated")
     else:
         dates = sorted(r["date"] for r in new_rows if r.get("date"))
+        summary.append(f"- dates: `{dates[0]}` … `{dates[-1]}`")
         log.info("added %d rows, dates %s…%s", len(new_rows), dates[0], dates[-1])
+    summary.append(f"- total rows now: **{len(df2)}**")
+    _write_step_summary(summary)
     return 0
 
 

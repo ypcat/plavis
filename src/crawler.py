@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 import logging
+import os
 import re
 import time
 from dataclasses import dataclass
 from datetime import date
+from pathlib import Path
 from typing import Iterator
 
 import requests
@@ -19,14 +21,34 @@ BASE = "https://www.mnd.gov.tw"
 LIST_URL = BASE + "/news/plaactlist/{page}"
 DETAIL_URL = BASE + "/news/plaact/{id}"
 
+# Send a full desktop-Chrome-looking set of headers; the MND F5/WAF tier
+# returns 403 to bare requests-default UAs.
 HEADERS = {
     "User-Agent": (
-        "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
         "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
     ),
-    "Accept-Language": "zh-TW,zh;q=0.9,en;q=0.8",
-    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+    "Accept": (
+        "text/html,application/xhtml+xml,application/xml;q=0.9,"
+        "image/avif,image/webp,image/apng,*/*;q=0.8"
+    ),
+    "Accept-Language": "zh-TW,zh;q=0.9,en-US;q=0.8,en;q=0.7",
+    "Accept-Encoding": "gzip, deflate, br",
+    "Upgrade-Insecure-Requests": "1",
+    "Sec-Fetch-Dest": "document",
+    "Sec-Fetch-Mode": "navigate",
+    "Sec-Fetch-Site": "none",
+    "Sec-Fetch-User": "?1",
+    "Sec-Ch-Ua": '"Chromium";v="124", "Google Chrome";v="124", "Not-A.Brand";v="99"',
+    "Sec-Ch-Ua-Mobile": "?0",
+    "Sec-Ch-Ua-Platform": '"Windows"',
+    "Cache-Control": "max-age=0",
+    "Connection": "keep-alive",
 }
+
+# Callers may set this to a directory; we will dump the raw HTML of pages
+# that come back empty or non-HTML so the next CI run can be diagnosed.
+DEBUG_DUMP_DIR: "os.PathLike | None" = None
 
 _DATE_RE = re.compile(r"(\d{4})[/.\-年](\d{1,2})[/.\-月](\d{1,2})")
 
@@ -40,11 +62,14 @@ class ListEntry:
 
 
 @retry(stop=stop_after_attempt(4), wait=wait_exponential(multiplier=2, min=2, max=16))
-def _get(url: str, session: requests.Session) -> str:
+def _get(url: str, session: requests.Session) -> tuple[str, int, str]:
+    """GET ``url`` and return ``(body, status, content_type)``."""
     resp = session.get(url, headers=HEADERS, timeout=30)
+    ct = resp.headers.get("content-type", "")
+    log.debug("GET %s -> %s (%d bytes, %s)", url, resp.status_code, len(resp.content), ct)
     resp.raise_for_status()
     resp.encoding = resp.apparent_encoding or "utf-8"
-    return resp.text
+    return resp.text, resp.status_code, ct
 
 
 def _parse_date(text: str) -> date | None:
@@ -58,10 +83,22 @@ def _parse_date(text: str) -> date | None:
         return None
 
 
+def _dump(name: str, text: str) -> None:
+    if DEBUG_DUMP_DIR is None:
+        return
+    d = Path(DEBUG_DUMP_DIR)
+    d.mkdir(parents=True, exist_ok=True)
+    (d / name).write_text(text, encoding="utf-8")
+    log.info("  dumped %d bytes to %s", len(text), d / name)
+
+
 def list_entries(page: int, session: requests.Session) -> list[ListEntry]:
     """Return entries on one list page. Empty list if page is beyond end."""
-    html = _get(LIST_URL.format(page=page), session)
+    url = LIST_URL.format(page=page)
+    html, status, ct = _get(url, session)
+    log.info("list page %d: HTTP %d, %d bytes, ct=%s", page, status, len(html), ct)
     soup = BeautifulSoup(html, "lxml")
+    total_links = len(soup.find_all("a"))
     out: list[ListEntry] = []
     seen: set[int] = set()
     for a in soup.select("a[href*='/news/plaact/']"):
@@ -88,6 +125,23 @@ def list_entries(page: int, session: requests.Session) -> list[ListEntry]:
                 date=dt,
                 title=title,
             )
+        )
+    log.info(
+        "  page %d: %d plaact links (of %d total anchors); %d unique entries",
+        page,
+        len(soup.select("a[href*='/news/plaact/']")),
+        total_links,
+        len(out),
+    )
+    if not out:
+        # keep the raw HTML + a trimmed text preview so the next run can be
+        # diagnosed from the CI artifact.
+        _dump(f"list_page_{page}.html", html)
+        preview = soup.get_text("\n", strip=True)[:500]
+        log.warning(
+            "  page %d returned no entries. first 500 chars of visible text:\n%s",
+            page,
+            preview,
         )
     return out
 
@@ -148,7 +202,8 @@ class Detail:
 
 def fetch_detail(entry_id: int, session: requests.Session) -> Detail:
     url = DETAIL_URL.format(id=entry_id)
-    html = _get(url, session)
+    html, status, ct = _get(url, session)
+    log.debug("detail %s: HTTP %d, %d bytes", entry_id, status, len(html))
     soup = BeautifulSoup(html, "lxml")
 
     title_el = soup.find(["h1", "h2", "h3"])
