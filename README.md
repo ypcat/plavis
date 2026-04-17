@@ -54,6 +54,11 @@ type_J-10,type_J-16,type_Su-30,type_H-6,type_KJ-500,type_BZK-005, ...
 (`22:15 UTC`), and commits any CSV/HTML diff back to the branch. Trigger
 manually with "Run workflow".
 
+`.github/workflows/pages.yml` publishes `index.html` + `data/` to GitHub
+Pages whenever the update workflow finishes or anyone pushes to `main`.
+To enable: **Settings → Pages → Build and deployment → Source: GitHub Actions**.
+The site will be served at `https://ypcat.github.io/plavis/`.
+
 ## Source & caveats
 
 - Primary source: MND PLA Activities list, `https://www.mnd.gov.tw/news/plaactlist/{page}`.
