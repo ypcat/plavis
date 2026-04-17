@@ -1,11 +1,9 @@
 """Update the PLA-activity dataset and regenerate index.html.
 
-Typical use:
-
-    python update.py                      # incremental, OCR on
-    python update.py --no-ocr             # totals only
-    python update.py --since 2026-01-01   # hard floor for this run
-    python update.py --full               # walk until list exhausted
+Usage:
+    python update.py                        # incremental
+    python update.py --since 2026-01-01     # hard floor for this run
+    python update.py --full                 # walk until list exhausted
 """
 
 from __future__ import annotations
@@ -18,7 +16,7 @@ import time
 from datetime import date, datetime
 from pathlib import Path
 
-from src import crawler, ocr, parser, render, store
+from src import crawler, parser, render, store
 
 ROOT = Path(__file__).resolve().parent
 CSV_PATH = ROOT / "data" / "pla_activity.csv"
@@ -26,24 +24,26 @@ HTML_PATH = ROOT / "index.html"
 DEFAULT_EARLIEST = date(2020, 9, 1)
 
 
+def _parse_date(s: str) -> date:
+    return datetime.strptime(s, "%Y-%m-%d").date()
+
+
 def _parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--full", action="store_true", help="ignore CSV, crawl everything")
-    p.add_argument("--since", type=_parse_date, default=None, help="stop once older than YYYY-MM-DD")
+    p.add_argument("--since", type=_parse_date, default=None,
+                   help="stop once older than YYYY-MM-DD")
     p.add_argument("--earliest", type=_parse_date, default=DEFAULT_EARLIEST,
                    help=f"absolute floor (default {DEFAULT_EARLIEST})")
-    p.add_argument("--no-ocr", action="store_true", help="skip infographic OCR")
-    p.add_argument("--ocr-backend", choices=["paddle", "tesseract"], default=None)
     p.add_argument("--max-pages", type=int, default=500)
     p.add_argument("--dry-run", action="store_true", help="don't write CSV/HTML")
     p.add_argument("--debug-dump", type=Path, default=None,
-                   help="directory to dump raw HTML of empty/failed pages")
+                   help="directory to dump raw HTML of empty pages")
     p.add_argument("-v", "--verbose", action="store_true")
     return p.parse_args()
 
 
 def _write_step_summary(lines: list[str]) -> None:
-    """Write a block to $GITHUB_STEP_SUMMARY when running under Actions."""
     summary_path = os.environ.get("GITHUB_STEP_SUMMARY")
     if not summary_path:
         return
@@ -51,18 +51,14 @@ def _write_step_summary(lines: list[str]) -> None:
         f.write("\n".join(lines) + "\n")
 
 
-def _parse_date(s: str) -> date:
-    return datetime.strptime(s, "%Y-%m-%d").date()
-
-
-def _build_row(detail: crawler.Detail, totals: parser.Totals, types: dict[str, int]) -> dict:
+def _build_row(detail: crawler.Detail, totals: parser.Totals) -> dict:
     row: dict = {
         "date": detail.date.isoformat() if detail.date else None,
-        "source_id": detail.id,
+        "source_id": str(detail.id),
     }
-    row.update(totals.as_dict())
-    for k, v in types.items():
-        row[f"type_{k}"] = v
+    for k, v in totals.as_dict().items():
+        if v is not None:
+            row[k] = str(v)
     return row
 
 
@@ -74,25 +70,30 @@ def main() -> int:
     )
     log = logging.getLogger("update")
 
-    df = store.load_csv(CSV_PATH)
+    rows = store.load(CSV_PATH)
 
     known_ids: set[int] = set()
-    if not args.full and "source_id" in df.columns:
-        known_ids = {int(x) for x in df["source_id"].dropna().astype(int).tolist()}
+    if not args.full:
+        for r in rows.values():
+            sid = r.get("source_id")
+            if sid:
+                try:
+                    known_ids.add(int(sid))
+                except ValueError:
+                    pass
 
     floor = args.earliest
     if args.since and (floor is None or args.since > floor):
         floor = args.since
 
-    # Enable dump-on-empty. In CI we always dump so the next run has evidence.
     dump_dir = args.debug_dump
     if dump_dir is None and os.environ.get("GITHUB_ACTIONS") == "true":
         dump_dir = ROOT / "debug"
     if dump_dir is not None:
         crawler.DEBUG_DUMP_DIR = dump_dir
 
-    log.info("existing rows: %d; known ids: %d; floor: %s; ocr: %s",
-             len(df), len(known_ids), floor, "off" if args.no_ocr else "on")
+    log.info("existing rows: %d; known ids: %d; floor: %s",
+             len(rows), len(known_ids), floor)
 
     session = crawler.new_session()
 
@@ -118,19 +119,8 @@ def main() -> int:
             continue
 
         totals = parser.parse_body(detail.body_text)
-
-        types: dict[str, int] = {}
-        if not args.no_ocr and detail.image_urls:
-            img_url = detail.image_urls[0]
-            try:
-                img_bytes = crawler.download_image(img_url, session)
-                types = ocr.extract_type_counts_from_image(img_bytes, backend=args.ocr_backend)
-                if types:
-                    log.info("  types: %s", types)
-            except Exception as e:
-                log.warning("  OCR failed for %s: %s", img_url, e)
-
-        new_rows.append(_build_row(detail, totals, types))
+        log.info("  totals: %s", {k: v for k, v in totals.as_dict().items() if v is not None})
+        new_rows.append(_build_row(detail, totals))
         time.sleep(0.5)
 
     log.info("crawled %d entries, collected %d rows", seen, len(new_rows))
@@ -140,24 +130,24 @@ def main() -> int:
             log.info("row: %s", r)
         return 0
 
-    df2 = store.upsert_rows(df, new_rows)
-    store.save_csv(df2, CSV_PATH)
-    render.build_html(df2, HTML_PATH)
+    merged = store.upsert(rows, new_rows)
+    store.save(merged, CSV_PATH)
+    render.build_html(merged, HTML_PATH)
 
     summary = [
         "### plavis update summary",
-        f"- existing rows: **{len(df)}**",
+        f"- existing rows before run: **{len(rows) - len(new_rows) + sum(1 for r in new_rows if r.get('date') in rows)}**",
         f"- entries crawled this run: **{seen}**",
         f"- new/updated rows this run: **{len(new_rows)}**",
+        f"- total rows now: **{len(merged)}**",
     ]
-    if len(new_rows) == 0:
-        summary.append("- :warning: no new rows (see `debug/` artifact if in CI)")
+    if not new_rows:
+        summary.append("- :warning: no new rows (inspect `debug/` artifact)")
         log.warning("no new rows; CSV/HTML regenerated")
     else:
         dates = sorted(r["date"] for r in new_rows if r.get("date"))
         summary.append(f"- dates: `{dates[0]}` … `{dates[-1]}`")
         log.info("added %d rows, dates %s…%s", len(new_rows), dates[0], dates[-1])
-    summary.append(f"- total rows now: **{len(df2)}**")
     _write_step_summary(summary)
     return 0
 

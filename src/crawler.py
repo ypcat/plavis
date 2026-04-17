@@ -1,4 +1,4 @@
-"""Fetch the MND PLA activity bulletin list and detail pages."""
+"""Fetch the MND PLA activity bulletin list and detail pages. Stdlib + requests + bs4 only."""
 
 from __future__ import annotations
 
@@ -13,7 +13,6 @@ from typing import Iterator
 
 import requests
 from bs4 import BeautifulSoup
-from tenacity import retry, stop_after_attempt, wait_exponential
 
 log = logging.getLogger(__name__)
 
@@ -21,8 +20,7 @@ BASE = "https://www.mnd.gov.tw"
 LIST_URL = BASE + "/news/plaactlist/{page}"
 DETAIL_URL = BASE + "/news/plaact/{id}"
 
-# Send a full desktop-Chrome-looking set of headers; the MND F5/WAF tier
-# returns 403 to bare requests-default UAs.
+# Full desktop-Chrome-looking header set; the MND WAF 403s minimal clients.
 HEADERS = {
     "User-Agent": (
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
@@ -46,9 +44,8 @@ HEADERS = {
     "Connection": "keep-alive",
 }
 
-# Callers may set this to a directory; we will dump the raw HTML of pages
-# that come back empty or non-HTML so the next CI run can be diagnosed.
 DEBUG_DUMP_DIR: "os.PathLike | None" = None
+_PARSER = "html.parser"
 
 _DATE_RE = re.compile(r"(\d{4})[/.\-年](\d{1,2})[/.\-月](\d{1,2})")
 
@@ -61,15 +58,50 @@ class ListEntry:
     title: str
 
 
-@retry(stop=stop_after_attempt(4), wait=wait_exponential(multiplier=2, min=2, max=16))
-def _get(url: str, session: requests.Session) -> tuple[str, int, str]:
-    """GET ``url`` and return ``(body, status, content_type)``."""
-    resp = session.get(url, headers=HEADERS, timeout=30)
-    ct = resp.headers.get("content-type", "")
-    log.debug("GET %s -> %s (%d bytes, %s)", url, resp.status_code, len(resp.content), ct)
-    resp.raise_for_status()
-    resp.encoding = resp.apparent_encoding or "utf-8"
-    return resp.text, resp.status_code, ct
+@dataclass
+class Detail:
+    id: int
+    url: str
+    date: date | None
+    title: str
+    body_text: str
+
+
+def new_session() -> requests.Session:
+    s = requests.Session()
+    s.headers.update(HEADERS)
+    return s
+
+
+def _get(url: str, session: requests.Session, attempts: int = 4) -> tuple[str, int, str]:
+    """GET with exponential-backoff retry. Returns ``(body, status, content_type)``."""
+    last_exc: Exception | None = None
+    for i in range(attempts):
+        try:
+            resp = session.get(url, headers=HEADERS, timeout=30)
+            ct = resp.headers.get("content-type", "")
+            log.debug("GET %s -> %s (%d bytes, %s)", url, resp.status_code, len(resp.content), ct)
+            resp.raise_for_status()
+            resp.encoding = resp.apparent_encoding or "utf-8"
+            return resp.text, resp.status_code, ct
+        except Exception as e:
+            last_exc = e
+            if i == attempts - 1:
+                break
+            wait = 2 ** (i + 1)
+            log.warning("GET %s failed (%s); retry %d/%d in %ds", url, e, i + 1, attempts - 1, wait)
+            time.sleep(wait)
+    assert last_exc is not None
+    raise last_exc
+
+
+def _dump(name: str, text: str) -> None:
+    if DEBUG_DUMP_DIR is None:
+        return
+    d = Path(DEBUG_DUMP_DIR)
+    d.mkdir(parents=True, exist_ok=True)
+    (d / name).write_text(text, encoding="utf-8")
+    log.info("  dumped %d bytes to %s", len(text), d / name)
 
 
 def _parse_date(text: str) -> date | None:
@@ -83,25 +115,17 @@ def _parse_date(text: str) -> date | None:
         return None
 
 
-def _dump(name: str, text: str) -> None:
-    if DEBUG_DUMP_DIR is None:
-        return
-    d = Path(DEBUG_DUMP_DIR)
-    d.mkdir(parents=True, exist_ok=True)
-    (d / name).write_text(text, encoding="utf-8")
-    log.info("  dumped %d bytes to %s", len(text), d / name)
-
-
 def list_entries(page: int, session: requests.Session) -> list[ListEntry]:
-    """Return entries on one list page. Empty list if page is beyond end."""
+    """Return entries on one list page. Empty list if the page is past the end."""
     url = LIST_URL.format(page=page)
     html, status, ct = _get(url, session)
     log.info("list page %d: HTTP %d, %d bytes, ct=%s", page, status, len(html), ct)
-    soup = BeautifulSoup(html, "lxml")
-    total_links = len(soup.find_all("a"))
+    soup = BeautifulSoup(html, _PARSER)
+    total_anchors = len(soup.find_all("a"))
+    anchors = soup.select("a[href*='/news/plaact/']")
     out: list[ListEntry] = []
     seen: set[int] = set()
-    for a in soup.select("a[href*='/news/plaact/']"):
+    for a in anchors:
         href = a.get("href", "")
         m = re.search(r"/news/plaact/(\d+)", href)
         if not m:
@@ -111,38 +135,21 @@ def list_entries(page: int, session: requests.Session) -> list[ListEntry]:
             continue
         seen.add(nid)
         title = a.get_text(" ", strip=True)
-        # date sometimes lives in a sibling, sometimes in the card parent
         container = a
         for _ in range(4):
             if container and _DATE_RE.search(container.get_text(" ", strip=True) or ""):
                 break
             container = container.parent if container else None
         dt = _parse_date((container or a).get_text(" ", strip=True)) or _parse_date(title)
-        out.append(
-            ListEntry(
-                id=nid,
-                url=BASE + f"/news/plaact/{nid}",
-                date=dt,
-                title=title,
-            )
-        )
+        out.append(ListEntry(id=nid, url=BASE + f"/news/plaact/{nid}", date=dt, title=title))
     log.info(
         "  page %d: %d plaact links (of %d total anchors); %d unique entries",
-        page,
-        len(soup.select("a[href*='/news/plaact/']")),
-        total_links,
-        len(out),
+        page, len(anchors), total_anchors, len(out),
     )
     if not out:
-        # keep the raw HTML + a trimmed text preview so the next run can be
-        # diagnosed from the CI artifact.
         _dump(f"list_page_{page}.html", html)
         preview = soup.get_text("\n", strip=True)[:500]
-        log.warning(
-            "  page %d returned no entries. first 500 chars of visible text:\n%s",
-            page,
-            preview,
-        )
+        log.warning("  page %d empty. first 500 chars of visible text:\n%s", page, preview)
     return out
 
 
@@ -153,9 +160,8 @@ def iter_entries(
     max_pages: int = 500,
     grace_pages: int = 3,
 ) -> Iterator[ListEntry]:
-    """Walk pages 1..N, yielding entries. Stops once we've seen enough
-    already-known entries (``grace_pages`` consecutive pages with no new IDs),
-    or once every entry on a page is older than ``earliest``."""
+    """Walk pages 1..N, yielding unseen entries until we exhaust them or
+    hit ``grace_pages`` consecutive pages with no new IDs."""
     stop_ids = stop_ids or set()
     no_new_streak = 0
     for page in range(1, max_pages + 1):
@@ -190,26 +196,15 @@ def iter_entries(
         time.sleep(1.0)
 
 
-@dataclass
-class Detail:
-    id: int
-    url: str
-    date: date | None
-    title: str
-    body_text: str
-    image_urls: list[str]
-
-
 def fetch_detail(entry_id: int, session: requests.Session) -> Detail:
     url = DETAIL_URL.format(id=entry_id)
     html, status, ct = _get(url, session)
     log.debug("detail %s: HTTP %d, %d bytes", entry_id, status, len(html))
-    soup = BeautifulSoup(html, "lxml")
+    soup = BeautifulSoup(html, _PARSER)
 
     title_el = soup.find(["h1", "h2", "h3"])
     title = title_el.get_text(" ", strip=True) if title_el else ""
 
-    # body lives in an article/section; fall back to whole page text
     article = (
         soup.find("article")
         or soup.find("div", class_=re.compile(r"(content|article|news)"))
@@ -217,39 +212,5 @@ def fetch_detail(entry_id: int, session: requests.Session) -> Detail:
     )
     body_text = article.get_text("\n", strip=True) if article else ""
 
-    img_urls: list[str] = []
-    for img in (article.find_all("img") if article else []):
-        src = img.get("src") or img.get("data-src") or ""
-        if not src:
-            continue
-        if src.startswith("/"):
-            src = BASE + src
-        if not src.startswith("http"):
-            continue
-        img_urls.append(src)
-
     dt = _parse_date(title) or _parse_date(body_text[:200])
-    return Detail(
-        id=entry_id,
-        url=url,
-        date=dt,
-        title=title,
-        body_text=body_text,
-        image_urls=img_urls,
-    )
-
-
-def download_image(url: str, session: requests.Session) -> bytes:
-    @retry(stop=stop_after_attempt(4), wait=wait_exponential(multiplier=2, min=2, max=16))
-    def _fetch() -> bytes:
-        resp = session.get(url, headers=HEADERS, timeout=60)
-        resp.raise_for_status()
-        return resp.content
-
-    return _fetch()
-
-
-def new_session() -> requests.Session:
-    s = requests.Session()
-    s.headers.update(HEADERS)
-    return s
+    return Detail(id=entry_id, url=url, date=dt, title=title, body_text=body_text)

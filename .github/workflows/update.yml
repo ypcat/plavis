@@ -10,10 +10,6 @@ on:
         description: "Crawl every page (full backfill)"
         required: false
         default: "false"
-      no_ocr:
-        description: "Skip OCR"
-        required: false
-        default: "false"
 
 permissions:
   contents: write
@@ -25,7 +21,7 @@ concurrency:
 jobs:
   update:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
 
@@ -34,28 +30,15 @@ jobs:
           python-version: "3.11"
           cache: pip
 
-      - name: System deps (OCR)
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends \
-            tesseract-ocr tesseract-ocr-chi-tra \
-            libgl1 libglib2.0-0
-
       - name: Install Python deps
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt || {
-            echo "::warning::paddle install failed; continuing with tesseract only"
-            pip install -r <(grep -v '^paddle' requirements.txt)
-          }
+          pip install -r requirements.txt
 
       - name: Run update
-        env:
-          OCR_BACKEND: ${{ vars.OCR_BACKEND || 'paddle' }}
         run: |
           args="--verbose"
           if [ "${{ inputs.full }}" = "true" ]; then args="$args --full"; fi
-          if [ "${{ inputs.no_ocr }}" = "true" ]; then args="$args --no-ocr"; fi
           python update.py $args 2>&1 | tee update.log
 
       - name: Upload debug artifacts
@@ -86,7 +69,6 @@ jobs:
             fi
             echo "push rejected on attempt $i; rebasing onto origin/main"
             git fetch origin main
-            # preserve our one commit on top of whatever landed upstream
             git rebase origin/main || {
               echo "::error::rebase failed; aborting"
               git rebase --abort || true

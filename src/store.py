@@ -1,10 +1,9 @@
-"""CSV read/write with date-keyed upsert and union-of-columns."""
+"""CSV read/write with date-keyed upsert and union-of-columns. Stdlib only."""
 
 from __future__ import annotations
 
+import csv
 from pathlib import Path
-
-import pandas as pd
 
 BASE_COLUMNS = [
     "date",
@@ -20,42 +19,61 @@ BASE_COLUMNS = [
 ]
 
 
-def load_csv(path: Path) -> pd.DataFrame:
+def load(path: Path) -> dict[str, dict[str, str]]:
+    """Return ``{date: {column: value}}``; empty dict if the file is missing."""
     if not path.exists():
-        return pd.DataFrame(columns=BASE_COLUMNS)
-    df = pd.read_csv(path, dtype={"source_id": "Int64"})
-    for col in BASE_COLUMNS:
-        if col not in df.columns:
-            df[col] = pd.NA
-    return df
+        return {}
+    rows: dict[str, dict[str, str]] = {}
+    with path.open("r", encoding="utf-8", newline="") as f:
+        reader = csv.DictReader(f)
+        for row in reader:
+            d = (row.get("date") or "").strip()
+            if not d:
+                continue
+            # drop empty-string fields so column-union is predictable
+            rows[d] = {k: v for k, v in row.items() if v not in (None, "")}
+    return rows
 
 
-def _order_columns(df: pd.DataFrame) -> list[str]:
-    type_cols = sorted(c for c in df.columns if c.startswith("type_"))
-    other = [c for c in df.columns if c not in BASE_COLUMNS and c not in type_cols]
-    return BASE_COLUMNS + sorted(other) + type_cols
-
-
-def upsert_rows(df: pd.DataFrame, rows: list[dict]) -> pd.DataFrame:
-    if not rows:
-        return df
-    new = pd.DataFrame(rows)
-    combined = pd.concat([df, new], ignore_index=True, sort=False)
-    # keep the *last* occurrence for each date (new rows overwrite old)
-    combined = combined.drop_duplicates(subset=["date"], keep="last")
-    combined = combined.sort_values("date", kind="stable").reset_index(drop=True)
-    combined = combined[_order_columns(combined)]
-    return combined
-
-
-def save_csv(df: pd.DataFrame, path: Path) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    df = df.copy()
-    df = df[_order_columns(df)]
-    # Write integer columns without trailing ``.0`` and keep NaN as empty.
-    for col in df.columns:
-        if col in ("date",):
+def upsert(existing: dict[str, dict], new_rows: list[dict]) -> dict[str, dict]:
+    """Merge ``new_rows`` into ``existing``. For a given date, new values
+    overwrite old values cell-by-cell; ``None``/``""`` in new rows do not
+    erase existing data."""
+    for r in new_rows:
+        d = r.get("date")
+        if not d:
             continue
-        if pd.api.types.is_numeric_dtype(df[col]):
-            df[col] = df[col].astype("Int64")
-    df.to_csv(path, index=False)
+        cleaned = {k: v for k, v in r.items() if v not in (None, "")}
+        if d in existing:
+            existing[d].update(cleaned)
+        else:
+            existing[d] = cleaned
+    return existing
+
+
+def _order_columns(all_cols: set[str]) -> list[str]:
+    type_cols = sorted(c for c in all_cols if c.startswith("type_"))
+    other = sorted(c for c in all_cols if c not in BASE_COLUMNS and not c.startswith("type_"))
+    return BASE_COLUMNS + other + type_cols
+
+
+def save(rows: dict[str, dict], path: Path) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    all_cols: set[str] = set(BASE_COLUMNS)
+    for r in rows.values():
+        all_cols.update(r.keys())
+    cols = _order_columns(all_cols)
+    with path.open("w", encoding="utf-8", newline="") as f:
+        w = csv.DictWriter(f, fieldnames=cols, extrasaction="ignore")
+        w.writeheader()
+        for d in sorted(rows):
+            row = rows[d]
+            w.writerow({c: row.get(c, "") for c in cols})
+
+
+def row_count(rows: dict) -> int:
+    return len(rows)
+
+
+def latest_date(rows: dict) -> str | None:
+    return max(rows) if rows else None

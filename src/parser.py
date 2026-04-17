@@ -58,7 +58,10 @@ _ZH_TOTAL_AC = re.compile(r"偵獲[^。\n]*?共機\s*(\d+)\s*架次")
 _ZH_TOTAL_AC_ALT = re.compile(r"共機\s*(\d+)\s*架次")
 _ZH_PLAN = re.compile(r"共艦\s*(\d+)\s*艘")
 _ZH_OFFICIAL = re.compile(r"公務船\s*(\d+)\s*艘")
-_ZH_MEDIAN = re.compile(r"(?:其中)?\s*(\d+)\s*架次[^。\n]*?(?:逾越|越過|跨越)[^。\n]*?(?:海峽)?中線")
+# Require the number to sit directly in front of 逾越/越過/跨越 (<=4 chars
+# of whitespace/punctuation between) so we don't pick up the overall total
+# from the leading clause.
+_ZH_MEDIAN = re.compile(r"(\d+)\s*架次[\s、,，]{0,4}(?:逾越|越過|跨越)[^。\n]{0,12}(?:海峽)?中線")
 # ADIZ quadrants (Chinese uses 北部/中部/西南部/東部/東南部 空域).
 # MND always writes ``<quadrant> <N>架次`` and lists the quadrants with no
 # number only in the post-2024 simplified summary. Require the quadrant name
