@@ -87,7 +87,13 @@
       hovertemplate: '%{x}<br>' + name + ': %{y}<extra></extra>',
     }));
 
+  const darkMode = window.matchMedia('(prefers-color-scheme: dark)').matches;
+
   const rangeSelector = {
+    bgcolor:     darkMode ? '#242935' : '#f0f2f7',
+    activecolor: darkMode ? '#3a4560' : '#c8cfe0',
+    bordercolor: darkMode ? '#3a4560' : '#c8cfe0',
+    font: { color: darkMode ? '#e6e8ec' : '#1a1d24' },
     buttons: [
       { step: 'day',   stepmode: 'backward', count: 7,  label: '7d' },
       { step: 'day',   stepmode: 'backward', count: 30, label: '30d' },
@@ -105,6 +111,12 @@
     legend: { orientation: 'h', y: -0.25 },
     xaxis: { type: 'date', rangeselector: rangeSelector, rangeslider: { visible: true } },
     hovermode: 'x unified',
+    hoverlabel: {
+      bgcolor:     darkMode ? '#1e2535' : '#ffffff',
+      bordercolor: darkMode ? '#3a4560' : '#c8cfe0',
+      font: { color: darkMode ? '#e6e8ec' : '#1a1d24' },
+      namelength: -1,
+    },
   };
 
   Plotly.newPlot('totals', totalsData, { ...layoutBase }, { responsive: true, displaylogo: false });
