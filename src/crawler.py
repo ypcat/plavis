@@ -47,7 +47,8 @@ HEADERS = {
 DEBUG_DUMP_DIR: "os.PathLike | None" = None
 _PARSER = "html.parser"
 
-_DATE_RE = re.compile(r"(\d{4})[/.\-年](\d{1,2})[/.\-月](\d{1,2})")
+_DATE_RE = re.compile(r"(\d{3,4})[/.\-年](\d{1,2})[/.\-月](\d{1,2})")
+_ROC_THRESHOLD = 200  # years <= this are ROC民國; add 1911 to convert
 
 
 @dataclass
@@ -109,6 +110,8 @@ def _parse_date(text: str) -> date | None:
     if not m:
         return None
     y, mo, d = (int(x) for x in m.groups())
+    if y <= _ROC_THRESHOLD:
+        y += 1911
     try:
         return date(y, mo, d)
     except ValueError:
@@ -122,12 +125,12 @@ def list_entries(page: int, session: requests.Session) -> list[ListEntry]:
     log.info("list page %d: HTTP %d, %d bytes, ct=%s", page, status, len(html), ct)
     soup = BeautifulSoup(html, _PARSER)
     total_anchors = len(soup.find_all("a"))
-    anchors = soup.select("a[href*='/news/plaact/']")
+    anchors = soup.select("a[href*='news/plaact/']")
     out: list[ListEntry] = []
     seen: set[int] = set()
     for a in anchors:
         href = a.get("href", "")
-        m = re.search(r"/news/plaact/(\d+)", href)
+        m = re.search(r"news/plaact/(\d+)", href)
         if not m:
             continue
         nid = int(m.group(1))
