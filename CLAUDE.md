@@ -36,7 +36,7 @@ Key invariants:
 
 Two workflows in `.github/workflows/`:
 
-- `update.yml` — daily 22:15 UTC + `workflow_dispatch`. Installs uv via `astral-sh/setup-uv@v4` (cache disabled — no `uv.lock`), needs `actions/setup-python@v5` separately because `setup-uv` doesn't install Python. Runs `update.py --verbose`, uploads `update.log` + `debug/` as artifact, then commits `data/pla_activity.csv` + `index.html` if changed. The push step has a 5-attempt rebase-on-rejection loop because concurrent runs can collide.
+- `update.yml` — daily 22:15 UTC + `workflow_dispatch`. Two CI gotchas baked into this file: `astral-sh/setup-uv@v4` needs `enable-cache: false` *explicitly* (the default is `auto`, which still hard-errors when `uv.lock` is absent), and it doesn't install Python — `actions/setup-python@v5` must run before it so `uv pip install --system` finds a 3.11 interpreter. Runs `update.py --verbose`, uploads `update.log` + `debug/` as artifact, then commits `data/pla_activity.csv` + `index.html` if changed. The push step has a 5-attempt rebase-on-rejection loop because concurrent runs can collide.
 - `pages.yml` — deploys `index.html` + `data/` to GitHub Pages on push to `main`, on `workflow_run` success of update, or manual dispatch.
 
 Default branch must be `main`. Pages source must be set to "GitHub Actions" in repo settings.
