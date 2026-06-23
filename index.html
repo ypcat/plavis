@@ -34,7 +34,7 @@
   Daily counts from the Taiwan MND bulletin.
   538 days of data ·
   latest 2026-06-22 ·
-  generated 2026-06-22 22:52 UTC.
+  generated 2026-06-23 14:55 UTC.
 </p>
 
 <div class="card"><h2>Daily totals</h2><div id="totals" style="height:460px"></div></div>
@@ -605,6 +605,18 @@
   }
   function asNum(v) { if (v === '' || v == null) return null; const n = +v; return Number.isFinite(n) ? n : null; }
 
+  // Trailing simple moving average that ignores gaps; null where no data in the window.
+  function movingAverage(ys, window) {
+    return ys.map((_, i) => {
+      let sum = 0, n = 0;
+      for (let j = Math.max(0, i - window + 1); j <= i; j++) {
+        if (ys[j] != null) { sum += ys[j]; n++; }
+      }
+      return n ? sum / n : null;
+    });
+  }
+  const MA_WINDOW = 7;
+
   const rows = parseCSV(csv);
   const dates = rows.map(r => r.date);
   const headerCols = Object.keys(rows[0] || {});
@@ -616,15 +628,27 @@
     ['official_ships', 'Official ships'],
   ];
 
-  const totalsData = totalSeries
+  const totalsData = [];
+  totalSeries
     .filter(([k]) => headerCols.includes(k))
-    .map(([k, name]) => ({
-      x: dates,
-      y: rows.map(r => asNum(r[k])),
-      type: 'scatter', mode: 'lines+markers',
-      name, connectgaps: false,
-      hovertemplate: '%{x}<br>' + name + ': %{y}<extra></extra>',
-    }));
+    .forEach(([k, name]) => {
+      const y = rows.map(r => asNum(r[k]));
+      totalsData.push({
+        x: dates, y,
+        type: 'scatter', mode: 'lines+markers',
+        name, legendgroup: k, connectgaps: false,
+        hovertemplate: '%{x}<br>' + name + ': %{y}<extra></extra>',
+      });
+      // Smoothed overlay shares the legend entry so one click toggles both.
+      totalsData.push({
+        x: dates, y: movingAverage(y, MA_WINDOW),
+        type: 'scatter', mode: 'lines',
+        name: name + ' (' + MA_WINDOW + 'd avg)',
+        legendgroup: k, showlegend: false, connectgaps: false,
+        line: { dash: 'dot', width: 2 },
+        hovertemplate: '%{x}<br>' + name + ' (' + MA_WINDOW + 'd avg): %{y:.1f}<extra></extra>',
+      });
+    });
 
   const darkMode = window.matchMedia('(prefers-color-scheme: dark)').matches;
 
@@ -647,7 +671,7 @@
     plot_bgcolor: 'rgba(0,0,0,0)',
     font: { color: getComputedStyle(document.body).color },
     margin: { l: 50, r: 20, t: 10, b: 70 },
-    legend: { orientation: 'h', y: -0.25 },
+    legend: { orientation: 'h', y: -0.25, itemclick: 'toggle', itemdoubleclick: 'toggleothers' },
     xaxis: { type: 'date', rangeselector: rangeSelector, rangeslider: { visible: true } },
     hovermode: 'x unified',
     hoverlabel: {
