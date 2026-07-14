@@ -703,7 +703,73 @@
     },
   };
 
-  Plotly.newPlot('totals', totalsData, { ...layoutBase }, { responsive: true, displaylogo: false });
+  // Helper: after x-axis zoom/pan, rescale y-axis to visible data range
+  function attachAutoY(gd, isStacked) {
+    let busy = false;
+    gd.on('plotly_relayout', function (event) {
+      if (busy) return;
+      if (event['xaxis.autorange']) {
+        busy = true;
+        Plotly.relayout(gd, { 'yaxis.autorange': true })
+          .then(function () { busy = false; })
+          .catch(function () { busy = false; });
+        return;
+      }
+      // Box zoom, range slider, and rangeselector buttons report bounds as
+      // separate 'xaxis.range[0]'/'xaxis.range[1]' keys, not 'xaxis.range'.
+      const rng = event['xaxis.range'] ||
+        (event['xaxis.range[0]'] != null && event['xaxis.range[1]'] != null
+          ? [event['xaxis.range[0]'], event['xaxis.range[1]']]
+          : null);
+      if (!rng || !rng[0] || !rng[1]) return;
+      busy = true;
+      const x0 = new Date(rng[0]).getTime();
+      const x1 = new Date(rng[1]).getTime();
+      let ymin = Infinity, ymax = -Infinity;
+      const traces = gd.data;
+      if (isStacked) {
+        // For stacked charts: sum contributions per x index
+        const xs = traces[0] && traces[0].x;
+        if (xs) {
+          for (let i = 0; i < xs.length; i++) {
+            const t = new Date(xs[i]).getTime();
+            if (t < x0 || t > x1) continue;
+            let sum = 0;
+            let any = false;
+            for (let di = 0; di < traces.length; di++) {
+              const v = traces[di].y[i];
+              if (v != null && Number.isFinite(v)) { sum += v; any = true; }
+            }
+            if (any) { if (sum < ymin) ymin = sum; if (sum > ymax) ymax = sum; }
+          }
+        }
+      } else {
+        for (let di = 0; di < traces.length; di++) {
+          const t = traces[di];
+          const xs = t.x, ys = t.y;
+          if (!xs) continue;
+          for (let i = 0; i < xs.length; i++) {
+            const ti = new Date(xs[i]).getTime();
+            if (ti < x0 || ti > x1) continue;
+            const y = ys[i];
+            if (y != null && Number.isFinite(y)) {
+              if (y < ymin) ymin = y;
+              if (y > ymax) ymax = y;
+            }
+          }
+        }
+      }
+      if (ymin === Infinity) { busy = false; return; }
+      const pad = (ymax - ymin) * 0.08 || 0.5;
+      Plotly.relayout(gd, { 'yaxis.range': [ymin - pad, ymax + pad] })
+        .then(function () { busy = false; })
+        .catch(function () { busy = false; });
+    });
+  }
+
+  var totalsDiv = document.getElementById('totals');
+  Plotly.newPlot(totalsDiv, totalsData, { ...layoutBase }, { responsive: true, displaylogo: false });
+  attachAutoY(totalsDiv, false);
 
   const adizSeries = [
     ['n_adiz',  'North ADIZ'],
@@ -726,7 +792,9 @@
     document.getElementById('adiz').innerHTML =
       '<p style="color:#8a93a6;padding:.75rem">ADIZ per-quadrant breakdowns not available for the current dataset (MND stopped reporting per-quadrant counts in late January 2024).</p>';
   } else {
-    Plotly.newPlot('adiz', adizData, { ...layoutBase }, { responsive: true, displaylogo: false });
+    var adizDiv = document.getElementById('adiz');
+    Plotly.newPlot(adizDiv, adizData, { ...layoutBase }, { responsive: true, displaylogo: false });
+    attachAutoY(adizDiv, true);
   }
 })();
 </script>
