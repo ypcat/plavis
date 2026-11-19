@@ -2,51 +2,496 @@
 <html lang="en">
 <head>
 <meta charset="utf-8" />
-<title>PLA Activity around Taiwan — plavis</title>
+<title>PLA Activity Around Taiwan — Trend Monitor</title>
 <meta name="viewport" content="width=device-width,initial-scale=1" />
 <script src="https://cdn.plot.ly/plotly-2.35.2.min.js" charset="utf-8"></script>
 <style>
-  :root { color-scheme: light dark; }
+  :root {
+    --bg: #0b0e14;
+    --surface: #121722;
+    --surface-2: #181f2e;
+    --border: rgba(148, 163, 184, 0.13);
+    --border-strong: rgba(148, 163, 184, 0.24);
+    --text: #f1f5f9;
+    --text-muted: #94a3b8;
+    --text-dim: #64748b;
+    --accent: #38bdf8;
+    --accent-soft: rgba(56, 189, 248, 0.14);
+    --amber: #f59e0b;
+    --teal: #2dd4bf;
+    --rose: #fb7185;
+    --violet: #a78bfa;
+    --up-bg: rgba(251, 113, 133, 0.14);
+    --up-fg: #fb7185;
+    --down-bg: rgba(45, 212, 191, 0.14);
+    --down-fg: #2dd4bf;
+    --flat-bg: rgba(148, 163, 184, 0.14);
+    --flat-fg: #94a3b8;
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.28);
+  }
+
+  html[data-theme="light"] {
+    --bg: #f5f7fa;
+    --surface: #ffffff;
+    --surface-2: #f1f5f9;
+    --border: rgba(15, 23, 42, 0.09);
+    --border-strong: rgba(15, 23, 42, 0.18);
+    --text: #0f172a;
+    --text-muted: #475569;
+    --text-dim: #64748b;
+    --accent: #0284c7;
+    --accent-soft: rgba(2, 132, 199, 0.11);
+    --amber: #d97706;
+    --teal: #0d9488;
+    --rose: #e11d48;
+    --violet: #7c3aed;
+    --up-bg: rgba(225, 29, 72, 0.10);
+    --up-fg: #be123c;
+    --down-bg: rgba(13, 148, 136, 0.10);
+    --down-fg: #0f766e;
+    --flat-bg: rgba(100, 116, 139, 0.12);
+    --flat-fg: #475569;
+    --shadow: 0 1px 3px rgba(15, 23, 42, 0.05);
+  }
+
+  * { box-sizing: border-box; }
+
   body {
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue",
-                 Arial, "Noto Sans", "PingFang TC", "Microsoft JhengHei", sans-serif;
-    margin: 0; padding: 1.25rem 1.5rem 3rem; max-width: 1280px; margin-inline: auto;
-    background: #0f1115; color: #e6e8ec;
+    font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto,
+                 "Helvetica Neue", Arial, "PingFang TC", "Microsoft JhengHei", sans-serif;
+    margin: 0;
+    padding: 2rem 1.5rem 3.5rem;
+    max-width: 1240px;
+    margin-inline: auto;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
   }
-  h1 { font-size: 1.4rem; margin: 0 0 .25rem; }
-  p.sub { color: #8a93a6; margin: 0 0 1.25rem; font-size: .92rem; }
-  .card { background: #171a21; border: 1px solid #242935; border-radius: 10px;
-          padding: .75rem .75rem 1rem; margin-bottom: 1rem; }
-  .card h2 { font-size: 1.05rem; margin: .15rem .25rem .6rem; }
-  footer { margin-top: 1.5rem; color: #6c7386; font-size: .82rem; }
-  a { color: #6ea8ff; }
-  @media (prefers-color-scheme: light) {
-    body { background: #f8f9fb; color: #1a1d24; }
-    .card { background: #fff; border-color: #e2e6ef; }
-    p.sub { color: #556; }
-    footer { color: #667; }
+
+  /* Editorial Header */
+  header.hero {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 1rem;
+    padding-bottom: 1.25rem;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 1.25rem;
   }
+  .eyebrow {
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.11em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin: 0 0 0.35rem;
+  }
+  h1 {
+    font-size: clamp(1.55rem, 2.6vw, 2rem);
+    font-weight: 700;
+    letter-spacing: -0.025em;
+    margin: 0 0 0.35rem;
+    line-height: 1.18;
+  }
+  p.sub {
+    color: var(--text-muted);
+    margin: 0;
+    font-size: 0.9rem;
+  }
+  .header-meta {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    padding-top: 0.25rem;
+  }
+  .status-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    font-size: 0.78rem;
+    font-weight: 500;
+    color: var(--text-muted);
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    padding: 0.32rem 0.75rem;
+    font-variant-numeric: tabular-nums;
+  }
+  .status-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--teal);
+    box-shadow: 0 0 0 3px rgba(45, 212, 191, 0.18);
+  }
+  .theme-btn {
+    appearance: none;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    color: var(--text-muted);
+    border-radius: 999px;
+    padding: 0.32rem 0.68rem;
+    font-size: 0.78rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: border-color 0.15s, color 0.15s;
+  }
+  .theme-btn:hover {
+    border-color: var(--border-strong);
+    color: var(--text);
+  }
+
+  /* KPI Summary Strip */
+  .kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 0.85rem;
+    margin-bottom: 1.25rem;
+  }
+  @media (max-width: 900px) {
+    .kpi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  }
+  @media (max-width: 520px) {
+    .kpi-grid { grid-template-columns: 1fr; }
+  }
+  .kpi {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 0.95rem 1.1rem;
+    box-shadow: var(--shadow);
+    position: relative;
+    overflow: hidden;
+  }
+  .kpi::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 3px;
+    background: var(--kpi-accent, var(--accent));
+    opacity: 0.9;
+  }
+  .kpi-label {
+    font-size: 0.74rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    margin-bottom: 0.35rem;
+  }
+  .kpi-row {
+    display: flex;
+    align-items: baseline;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+  }
+  .kpi-value {
+    font-size: 1.65rem;
+    font-weight: 700;
+    letter-spacing: -0.03em;
+    font-variant-numeric: tabular-nums;
+    line-height: 1.15;
+  }
+  .kpi-unit {
+    font-size: 0.78rem;
+    color: var(--text-dim);
+    font-weight: 500;
+  }
+  .delta {
+    display: inline-flex;
+    align-items: center;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 0.12rem 0.45rem;
+    border-radius: 999px;
+    font-variant-numeric: tabular-nums;
+  }
+  .delta.up { background: var(--up-bg); color: var(--up-fg); }
+  .delta.down { background: var(--down-bg); color: var(--down-fg); }
+  .delta.flat { background: var(--flat-bg); color: var(--flat-fg); }
+  .kpi-sub {
+    margin-top: 0.3rem;
+    font-size: 0.76rem;
+    color: var(--text-dim);
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Unified Controls Bar */
+  .controls {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    margin-bottom: 1.1rem;
+    padding: 0.55rem 0.75rem;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    box-shadow: var(--shadow);
+  }
+  .ctrl-group {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+  }
+  .ctrl-label {
+    font-size: 0.72rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-dim);
+    margin-right: 0.15rem;
+  }
+  .seg {
+    display: inline-flex;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 2px;
+    gap: 2px;
+  }
+  .seg button {
+    appearance: none;
+    border: none;
+    background: transparent;
+    color: var(--text-muted);
+    font-size: 0.78rem;
+    font-weight: 600;
+    padding: 0.3rem 0.65rem;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s;
+    font-variant-numeric: tabular-nums;
+  }
+  .seg button:hover { color: var(--text); }
+  .seg button.active {
+    background: var(--accent-soft);
+    color: var(--accent);
+  }
+  .toggle-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 0.32rem 0.7rem;
+    cursor: pointer;
+    user-select: none;
+    transition: border-color 0.15s, color 0.15s;
+  }
+  .toggle-pill:hover { color: var(--text); border-color: var(--border-strong); }
+  .toggle-pill input { accent-color: var(--accent); margin: 0; cursor: pointer; }
+
+  /* Chart Cards */
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 1.15rem 1.25rem 0.9rem;
+    margin-bottom: 1.1rem;
+    box-shadow: var(--shadow);
+  }
+  .card-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 0.5rem 1rem;
+    margin-bottom: 0.45rem;
+  }
+  .card-title {
+    font-size: 1.05rem;
+    font-weight: 700;
+    letter-spacing: -0.015em;
+    margin: 0;
+  }
+  .card-sub {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    margin: 0.15rem 0 0;
+  }
+  .legend-inline {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.85rem;
+    font-size: 0.78rem;
+    color: var(--text-muted);
+  }
+  .legend-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-weight: 500;
+  }
+  .swatch-line {
+    width: 14px;
+    height: 3px;
+    border-radius: 2px;
+    display: inline-block;
+  }
+  .swatch-bar {
+    width: 10px;
+    height: 10px;
+    border-radius: 2px;
+    display: inline-block;
+  }
+  .chart-box {
+    width: 100%;
+  }
+
+  footer {
+    margin-top: 1.75rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--border);
+    color: var(--text-dim);
+    font-size: 0.8rem;
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    gap: 0.5rem;
+  }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+
+  /* Subtle Plotly modebar */
+  .modebar { opacity: 0.25; transition: opacity 0.2s; }
+  .card:hover .modebar { opacity: 0.85; }
 </style>
 </head>
 <body>
-<h1>PLA activity around Taiwan</h1>
-<p class="sub">
-  Daily counts from the Taiwan MND bulletin.
-  688 days of data ·
-  latest 2026-11-19 ·
-  generated 2026-11-19 03:26 UTC.
-</p>
 
-<div class="card"><h2>Daily totals</h2><div id="totals" style="height:460px"></div></div>
-<div class="card"><h2>ADIZ quadrant breakdown</h2><div id="adiz" style="height:380px"></div></div>
+<header class="hero">
+  <div>
+    <p class="eyebrow">Taiwan Strait Activity Monitor</p>
+    <h1>PLA Air &amp; Maritime Activity Around Taiwan</h1>
+    <p class="sub">
+      Rolling trends and daily surge counts from Taiwan Ministry of National Defense (MND) bulletins ·
+      688 days tracked
+    </p>
+  </div>
+  <div class="header-meta">
+    <span class="status-pill"><span class="status-dot"></span>Latest 2026-11-19</span>
+    <button type="button" class="theme-btn" id="theme-toggle" aria-label="Toggle color theme">Theme</button>
+  </div>
+</header>
+
+<section class="kpi-grid" aria-label="Key metrics">
+  <div class="kpi" style="--kpi-accent: var(--accent);">
+    <div class="kpi-label">PLA Aircraft · 30d Avg</div>
+    <div class="kpi-row">
+      <span class="kpi-value" id="kpi-air-val">—</span>
+      <span class="kpi-unit">/day</span>
+      <span class="delta flat" id="kpi-air-delta">—</span>
+    </div>
+    <div class="kpi-sub" id="kpi-air-sub">—</div>
+  </div>
+  <div class="kpi" style="--kpi-accent: var(--amber);">
+    <div class="kpi-label">PLAN Vessels · 30d Avg</div>
+    <div class="kpi-row">
+      <span class="kpi-value" id="kpi-plan-val">—</span>
+      <span class="kpi-unit">/day</span>
+      <span class="delta flat" id="kpi-plan-delta">—</span>
+    </div>
+    <div class="kpi-sub" id="kpi-plan-sub">—</div>
+  </div>
+  <div class="kpi" style="--kpi-accent: var(--teal);">
+    <div class="kpi-label">Official Ships · 30d Avg</div>
+    <div class="kpi-row">
+      <span class="kpi-value" id="kpi-ship-val">—</span>
+      <span class="kpi-unit">/day</span>
+      <span class="delta flat" id="kpi-ship-delta">—</span>
+    </div>
+    <div class="kpi-sub" id="kpi-ship-sub">—</div>
+  </div>
+  <div class="kpi" style="--kpi-accent: var(--rose);">
+    <div class="kpi-label">Peak Aircraft Day (in view)</div>
+    <div class="kpi-row">
+      <span class="kpi-value" id="kpi-peak-val">—</span>
+      <span class="kpi-unit">sorties</span>
+    </div>
+    <div class="kpi-sub" id="kpi-peak-sub">—</div>
+  </div>
+</section>
+
+<div class="controls" role="region" aria-label="Chart controls">
+  <div class="ctrl-group">
+    <span class="ctrl-label">Range</span>
+    <div class="seg" id="range-seg">
+      <button type="button" data-range="30">30D</button>
+      <button type="button" data-range="90">90D</button>
+      <button type="button" data-range="180">6M</button>
+      <button type="button" data-range="365">1Y</button>
+      <button type="button" data-range="all" class="active">ALL</button>
+    </div>
+  </div>
+  <div class="ctrl-group">
+    <span class="ctrl-label">Trend</span>
+    <div class="seg" id="ma-seg">
+      <button type="button" data-ma="7">7D avg</button>
+      <button type="button" data-ma="14" class="active">14D avg</button>
+      <button type="button" data-ma="30">30D avg</button>
+    </div>
+    <label class="toggle-pill">
+      <input type="checkbox" id="show-daily" checked />
+      Daily bars
+    </label>
+  </div>
+</div>
+
+<section class="card">
+  <div class="card-head">
+    <div>
+      <h2 class="card-title">PLA Aircraft Sorties</h2>
+      <p class="card-sub" id="air-sub">Trailing 14-day rolling average over daily sortie counts</p>
+    </div>
+    <div class="legend-inline" id="air-legend"></div>
+  </div>
+  <div id="chart-air" class="chart-box" style="height: 370px;"></div>
+</section>
+
+<section class="card">
+  <div class="card-head">
+    <div>
+      <h2 class="card-title">Maritime Presence</h2>
+      <p class="card-sub" id="sea-sub">PLAN naval vessels and official (coast guard / research) ships on dedicated scale</p>
+    </div>
+    <div class="legend-inline" id="sea-legend"></div>
+  </div>
+  <div id="chart-sea" class="chart-box" style="height: 310px;"></div>
+</section>
+
+<section class="card">
+  <div class="card-head">
+    <div>
+      <h2 class="card-title">ADIZ Sector Breakdown</h2>
+      <p class="card-sub">Monthly reported sorties by Air Defense Identification Zone quadrant</p>
+    </div>
+    <div class="legend-inline" id="adiz-legend"></div>
+  </div>
+  <div id="chart-adiz" class="chart-box" style="height: 290px;"></div>
+</section>
 
 <footer>
-  Source:
-  <a href="https://www.mnd.gov.tw/news/plaactlist/1" target="_blank" rel="noopener">
-    mnd.gov.tw · PLA Activities
-  </a>.
-  Totals are parsed directly from the bulletin text.
-  Code: <a href="https://github.com/ypcat/plavis" target="_blank" rel="noopener">ypcat/plavis</a>.
+  <div>
+    Source:
+    <a href="https://www.mnd.gov.tw/news/plaactlist/1" target="_blank" rel="noopener">Taiwan MND · PLA Activities</a> ·
+    Generated 2026-11-19 05:08 UTC
+  </div>
+  <div>
+    Rolling averages treat unreported categories on active bulletin days as 0; missing bulletins are excluded ·
+    <a href="https://github.com/ypcat/plavis" target="_blank" rel="noopener">ypcat/plavis</a>
+  </div>
 </footer>
 
 <script id="csv-data" type="text/plain">date,source_id,total_aircraft,median_crossings,sw_adiz,n_adiz,e_adiz,se_adiz,plan_vessels,official_ships
@@ -741,8 +1186,19 @@
 </script>
 <script>
 (function () {
-  const csv = document.getElementById('csv-data').textContent;
+  // ---- Theme management ----
+  const rootEl = document.documentElement;
+  const sysDark = window.matchMedia('(prefers-color-scheme: dark)');
+  let theme = sysDark.matches ? 'dark' : 'light';
+  function applyTheme(t) {
+    theme = t;
+    rootEl.setAttribute('data-theme', t);
+    document.getElementById('theme-toggle').textContent = t === 'dark' ? 'Light mode' : 'Dark mode';
+  }
+  applyTheme(theme);
 
+  // ---- Parse CSV ----
+  const rawCsv = document.getElementById('csv-data').textContent;
   function parseCSV(text) {
     const lines = text.replace(/\r/g, '').split('\n').filter(l => l.length);
     const header = lines.shift().split(',');
@@ -753,178 +1209,513 @@
       return row;
     });
   }
-  function asNum(v) { if (v === '' || v == null) return null; const n = +v; return Number.isFinite(n) ? n : null; }
+  function asNum(v) {
+    if (v === '' || v == null) return null;
+    const n = +v;
+    return Number.isFinite(n) ? n : null;
+  }
 
-  // Trailing simple moving average that ignores gaps; null where no data in the window.
-  function movingAverage(ys, window) {
+  const allRows = parseCSV(rawCsv);
+  const headerCols = Object.keys(allRows[0] || {});
+  const metricCols = ['total_aircraft', 'median_crossings', 'plan_vessels', 'official_ships', 'sw_adiz', 'n_adiz', 'e_adiz', 'se_adiz']
+    .filter(c => headerCols.includes(c));
+
+  // Trim leading all-empty rows so the chart starts where data begins
+  let firstDataIdx = allRows.findIndex(r => metricCols.some(c => asNum(r[c]) != null));
+  if (firstDataIdx < 0) firstDataIdx = 0;
+  const rows = allRows.slice(firstDataIdx);
+
+  const dates = rows.map(r => r.date);
+  const activeDay = rows.map(r =>
+    ['total_aircraft', 'plan_vessels', 'official_ships'].some(c => asNum(r[c]) != null)
+  );
+
+  // Raw series (null when blank) and zero-filled-on-active-day series for honest rolling averages
+  function rawSeries(col) {
+    return rows.map(r => asNum(r[col]));
+  }
+  function trendBaseSeries(col) {
+    return rows.map((r, i) => {
+      const v = asNum(r[col]);
+      if (v != null) return v;
+      return activeDay[i] ? 0 : null;
+    });
+  }
+  function hasAnyData(arr) {
+    return arr.some(v => v != null && v > 0);
+  }
+  function movingAverage(ys, win) {
     return ys.map((_, i) => {
       let sum = 0, n = 0;
-      for (let j = Math.max(0, i - window + 1); j <= i; j++) {
+      for (let j = Math.max(0, i - win + 1); j <= i; j++) {
         if (ys[j] != null) { sum += ys[j]; n++; }
       }
-      return n ? sum / n : null;
+      return n >= Math.min(3, win) ? sum / n : (n ? sum / n : null);
     });
   }
-  const MA_WINDOW = 7;
 
-  const rows = parseCSV(csv);
-  const dates = rows.map(r => r.date);
-  const headerCols = Object.keys(rows[0] || {});
+  const rawAir    = rawSeries('total_aircraft');
+  const rawMedian = rawSeries('median_crossings');
+  const rawPlan   = rawSeries('plan_vessels');
+  const rawShip   = rawSeries('official_ships');
 
-  const totalSeries = [
-    ['total_aircraft', 'All PLA aircraft'],
-    ['median_crossings', 'Crossed median line'],
-    ['plan_vessels', 'PLAN vessels'],
-    ['official_ships', 'Official ships'],
-  ];
+  const baseAir    = trendBaseSeries('total_aircraft');
+  const baseMedian = trendBaseSeries('median_crossings');
+  const basePlan   = trendBaseSeries('plan_vessels');
+  const baseShip   = trendBaseSeries('official_ships');
 
-  const totalsData = [];
-  totalSeries
-    .filter(([k]) => headerCols.includes(k))
-    .forEach(([k, name]) => {
-      const y = rows.map(r => asNum(r[k]));
-      totalsData.push({
-        x: dates, y,
-        type: 'scatter', mode: 'lines+markers',
-        name, legendgroup: k, connectgaps: false,
-        hovertemplate: '%{x}<br>' + name + ': %{y}<extra></extra>',
-      });
-      // Smoothed overlay shares the legend entry so one click toggles both.
-      totalsData.push({
-        x: dates, y: movingAverage(y, MA_WINDOW),
-        type: 'scatter', mode: 'lines',
-        name: name + ' (' + MA_WINDOW + 'd avg)',
-        legendgroup: k, showlegend: false, connectgaps: false,
-        line: { dash: 'dot', width: 2 },
-        hovertemplate: '%{x}<br>' + name + ' (' + MA_WINDOW + 'd avg): %{y:.1f}<extra></extra>',
-      });
-    });
+  const hasMedian = hasAnyData(rawMedian);
 
-  const darkMode = window.matchMedia('(prefers-color-scheme: dark)').matches;
+  // ---- KPI Calculations ----
+  function formatDateShort(iso) {
+    if (!iso) return '—';
+    const d = new Date(iso + 'T00:00:00');
+    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  }
 
-  const rangeSelector = {
-    bgcolor:     darkMode ? '#242935' : '#f0f2f7',
-    activecolor: darkMode ? '#3a4560' : '#c8cfe0',
-    bordercolor: darkMode ? '#3a4560' : '#c8cfe0',
-    font: { color: darkMode ? '#e6e8ec' : '#1a1d24' },
-    buttons: [
-      { step: 'day',   stepmode: 'backward', count: 7,  label: '7d' },
-      { step: 'day',   stepmode: 'backward', count: 30, label: '30d' },
-      { step: 'day',   stepmode: 'backward', count: 90, label: '90d' },
-      { step: 'year',  stepmode: 'backward', count: 1,  label: '1y' },
-      { step: 'all',   label: 'all' },
-    ],
+  function windowAvg(arr, startIdx, endIdx) {
+    let sum = 0, n = 0;
+    for (let i = Math.max(0, startIdx); i <= Math.min(arr.length - 1, endIdx); i++) {
+      if (arr[i] != null) { sum += arr[i]; n++; }
+    }
+    return n ? { avg: sum / n, sum, n } : null;
+  }
+
+  function setDelta(el, curr, prev) {
+    if (!curr || !prev || prev.avg === 0) {
+      el.textContent = '—';
+      el.className = 'delta flat';
+      return;
+    }
+    const pct = ((curr.avg - prev.avg) / prev.avg) * 100;
+    const sign = pct > 0 ? '+' : '';
+    el.textContent = (pct > 1 ? '▲ ' : pct < -1 ? '▼ ' : '') + sign + pct.toFixed(0) + '%';
+    el.className = 'delta ' + (pct > 3 ? 'up' : pct < -3 ? 'down' : 'flat');
+  }
+
+  function updateKPIs(startIdx) {
+    const end = rows.length - 1;
+    const currAir  = windowAvg(baseAir,  end - 29, end);
+    const prevAir  = windowAvg(baseAir,  end - 59, end - 30);
+    const currPlan = windowAvg(basePlan, end - 29, end);
+    const prevPlan = windowAvg(basePlan, end - 59, end - 30);
+    const currShip = windowAvg(baseShip, end - 29, end);
+    const prevShip = windowAvg(baseShip, end - 59, end - 30);
+
+    document.getElementById('kpi-air-val').textContent = currAir ? currAir.avg.toFixed(1) : '—';
+    setDelta(document.getElementById('kpi-air-delta'), currAir, prevAir);
+    document.getElementById('kpi-air-sub').textContent = currAir
+      ? currAir.sum.toLocaleString() + ' sorties in last 30d vs ' + (prevAir ? prevAir.sum.toLocaleString() : '—') + ' prior'
+      : 'No recent data';
+
+    document.getElementById('kpi-plan-val').textContent = currPlan ? currPlan.avg.toFixed(1) : '—';
+    setDelta(document.getElementById('kpi-plan-delta'), currPlan, prevPlan);
+    const lastPlanIdx = [...rawPlan].map((v, i) => v != null ? i : -1).filter(i => i >= 0).pop();
+    document.getElementById('kpi-plan-sub').textContent = lastPlanIdx != null
+      ? 'Latest: ' + rawPlan[lastPlanIdx] + ' vessels (' + formatDateShort(dates[lastPlanIdx]) + ')'
+      : 'No recent data';
+
+    document.getElementById('kpi-ship-val').textContent = currShip ? currShip.avg.toFixed(1) : '—';
+    setDelta(document.getElementById('kpi-ship-delta'), currShip, prevShip);
+    const lastShipIdx = [...rawShip].map((v, i) => v != null ? i : -1).filter(i => i >= 0).pop();
+    document.getElementById('kpi-ship-sub').textContent = lastShipIdx != null
+      ? 'Latest: ' + rawShip[lastShipIdx] + ' ships (' + formatDateShort(dates[lastShipIdx]) + ')'
+      : 'No recent data';
+
+    // Peak in visible range
+    let peakVal = -1, peakIdx = -1;
+    for (let i = startIdx; i <= end; i++) {
+      if (rawAir[i] != null && rawAir[i] > peakVal) {
+        peakVal = rawAir[i];
+        peakIdx = i;
+      }
+    }
+    if (peakIdx >= 0) {
+      document.getElementById('kpi-peak-val').textContent = peakVal;
+      const pv = rawPlan[peakIdx] != null ? ' · ' + rawPlan[peakIdx] + ' PLAN' : '';
+      document.getElementById('kpi-peak-sub').textContent = formatDateShort(dates[peakIdx]) + pv;
+    } else {
+      document.getElementById('kpi-peak-val').textContent = '—';
+      document.getElementById('kpi-peak-sub').textContent = 'No sorties in range';
+    }
+  }
+
+  // ---- Palette helper ----
+  function palette() {
+    const dark = theme === 'dark';
+    return {
+      text:        dark ? '#cbd5e1' : '#334155',
+      textDim:     dark ? '#64748b' : '#64748b',
+      grid:        dark ? 'rgba(148, 163, 184, 0.09)' : 'rgba(15, 23, 42, 0.07)',
+      zero:        dark ? 'rgba(148, 163, 184, 0.22)' : 'rgba(15, 23, 42, 0.16)',
+      hoverBg:     dark ? '#171f2e' : '#ffffff',
+      hoverBorder: dark ? 'rgba(148, 163, 184, 0.28)' : 'rgba(15, 23, 42, 0.16)',
+      hoverText:   dark ? '#f1f5f9' : '#0f172a',
+      air:         dark ? '#38bdf8' : '#0284c7',
+      airBar:      dark ? 'rgba(56, 189, 248, 0.24)' : 'rgba(2, 132, 199, 0.18)',
+      airFill:     dark ? 'rgba(56, 189, 248, 0.09)' : 'rgba(2, 132, 199, 0.07)',
+      median:      dark ? '#fb7185' : '#e11d48',
+      plan:        dark ? '#f59e0b' : '#d97706',
+      planBar:     dark ? 'rgba(245, 158, 11, 0.22)' : 'rgba(217, 119, 6, 0.17)',
+      ship:        dark ? '#2dd4bf' : '#0d9488',
+      shipBar:     dark ? 'rgba(45, 212, 191, 0.25)' : 'rgba(13, 148, 136, 0.18)',
+      refLine:     dark ? 'rgba(148, 163, 184, 0.35)' : 'rgba(15, 23, 42, 0.28)',
+      adiz: {
+        sw_adiz: dark ? '#38bdf8' : '#0284c7',
+        e_adiz:  dark ? '#f59e0b' : '#d97706',
+        n_adiz:  dark ? '#a78bfa' : '#7c3aed',
+        se_adiz: dark ? '#2dd4bf' : '#0d9488',
+      }
+    };
+  }
+
+  function baseLayout(p, opts) {
+    return {
+      paper_bgcolor: 'rgba(0,0,0,0)',
+      plot_bgcolor: 'rgba(0,0,0,0)',
+      font: {
+        family: '-apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, sans-serif',
+        color: p.text,
+        size: 12,
+      },
+      margin: { l: 42, r: 18, t: 16, b: 36 },
+      showlegend: false,
+      hovermode: 'x unified',
+      hoverlabel: {
+        bgcolor: p.hoverBg,
+        bordercolor: p.hoverBorder,
+        font: { color: p.hoverText, size: 12 },
+        namelength: -1,
+      },
+      xaxis: {
+        type: 'date',
+        showgrid: false,
+        zeroline: false,
+        linecolor: p.zero,
+        linewidth: 1,
+        tickfont: { color: p.textDim, size: 11 },
+        tickformatstops: [
+          { dtickrange: [null, 86400000 * 35], value: '%b %d' },
+          { dtickrange: [86400000 * 35, null], value: '%b %Y' },
+        ],
+      },
+      yaxis: {
+        showgrid: true,
+        gridcolor: p.grid,
+        gridwidth: 1,
+        zeroline: true,
+        zerolinecolor: p.zero,
+        zerolinewidth: 1,
+        tickfont: { color: p.textDim, size: 11 },
+        rangemode: 'tozero',
+        fixedrange: true,
+      },
+      ...opts,
+    };
+  }
+
+  const plotConfig = {
+    responsive: true,
+    displaylogo: false,
+    modeBarButtonsToRemove: ['lasso2d', 'select2d', 'autoScale2d', 'toggleSpikelines'],
   };
 
-  const layoutBase = {
-    paper_bgcolor: 'rgba(0,0,0,0)',
-    plot_bgcolor: 'rgba(0,0,0,0)',
-    font: { color: getComputedStyle(document.body).color },
-    margin: { l: 50, r: 20, t: 10, b: 70 },
-    legend: { orientation: 'h', y: -0.25, itemclick: 'toggle', itemdoubleclick: 'toggleothers' },
-    xaxis: { type: 'date', rangeselector: rangeSelector, rangeslider: { visible: true } },
-    hovermode: 'x unified',
-    hoverlabel: {
-      bgcolor:     darkMode ? '#1e2535' : '#ffffff',
-      bordercolor: darkMode ? '#3a4560' : '#c8cfe0',
-      font: { color: darkMode ? '#e6e8ec' : '#1a1d24' },
-      namelength: -1,
-    },
-  };
+  // ---- State ----
+  let currentRange = 'all';
+  let currentMA = 14;
+  let showDaily = true;
 
-  // Helper: after x-axis zoom/pan, rescale y-axis to visible data range
-  function attachAutoY(gd, isStacked) {
-    let busy = false;
-    gd.on('plotly_relayout', function (event) {
-      if (busy) return;
-      if (event['xaxis.autorange']) {
-        busy = true;
-        Plotly.relayout(gd, { 'yaxis.autorange': true })
-          .then(function () { busy = false; })
-          .catch(function () { busy = false; });
-        return;
-      }
-      // Box zoom, range slider, and rangeselector buttons report bounds as
-      // separate 'xaxis.range[0]'/'xaxis.range[1]' keys, not 'xaxis.range'.
-      const rng = event['xaxis.range'] ||
-        (event['xaxis.range[0]'] != null && event['xaxis.range[1]'] != null
-          ? [event['xaxis.range[0]'], event['xaxis.range[1]']]
-          : null);
-      if (!rng || !rng[0] || !rng[1]) return;
-      busy = true;
-      const x0 = new Date(rng[0]).getTime();
-      const x1 = new Date(rng[1]).getTime();
-      let ymin = Infinity, ymax = -Infinity;
-      const traces = gd.data;
-      if (isStacked) {
-        // For stacked charts: sum contributions per x index
-        const xs = traces[0] && traces[0].x;
-        if (xs) {
-          for (let i = 0; i < xs.length; i++) {
-            const t = new Date(xs[i]).getTime();
-            if (t < x0 || t > x1) continue;
-            let sum = 0;
-            let any = false;
-            for (let di = 0; di < traces.length; di++) {
-              const v = traces[di].y[i];
-              if (v != null && Number.isFinite(v)) { sum += v; any = true; }
-            }
-            if (any) { if (sum < ymin) ymin = sum; if (sum > ymax) ymax = sum; }
-          }
-        }
-      } else {
-        for (let di = 0; di < traces.length; di++) {
-          const t = traces[di];
-          const xs = t.x, ys = t.y;
-          if (!xs) continue;
-          for (let i = 0; i < xs.length; i++) {
-            const ti = new Date(xs[i]).getTime();
-            if (ti < x0 || ti > x1) continue;
-            const y = ys[i];
-            if (y != null && Number.isFinite(y)) {
-              if (y < ymin) ymin = y;
-              if (y > ymax) ymax = y;
-            }
-          }
-        }
-      }
-      if (ymin === Infinity) { busy = false; return; }
-      const pad = (ymax - ymin) * 0.08 || 0.5;
-      Plotly.relayout(gd, { 'yaxis.range': [ymin - pad, ymax + pad] })
-        .then(function () { busy = false; })
-        .catch(function () { busy = false; });
+  function getRangeStartIdx() {
+    if (currentRange === 'all' || !dates.length) return 0;
+    const days = parseInt(currentRange, 10);
+    const lastMs = new Date(dates[dates.length - 1] + 'T00:00:00').getTime();
+    const cutoff = lastMs - (days - 1) * 86400000;
+    const idx = dates.findIndex(d => new Date(d + 'T00:00:00').getTime() >= cutoff);
+    return idx >= 0 ? idx : 0;
+  }
+
+  function renderInlineLegend(containerId, items) {
+    const el = document.getElementById(containerId);
+    el.innerHTML = items.map(it => {
+      const swatch = it.kind === 'bar'
+        ? '<span class="swatch-bar" style="background:' + it.color + '"></span>'
+        : '<span class="swatch-line" style="background:' + it.color + '"></span>';
+      return '<span class="legend-item">' + swatch + it.label + '</span>';
+    }).join('');
+  }
+
+  // ---- Render All Charts ----
+  function renderAll() {
+    const p = palette();
+    const startIdx = getRangeStartIdx();
+    const visDates = dates.slice(startIdx);
+
+    updateKPIs(startIdx);
+
+    // Precompute rolling averages on full series (so left edge of zoomed window isn't distorted)
+    const maAir    = movingAverage(baseAir, currentMA).slice(startIdx);
+    const maMedian = movingAverage(baseMedian, currentMA).slice(startIdx);
+    const maPlan   = movingAverage(basePlan, currentMA).slice(startIdx);
+    const maShip   = movingAverage(baseShip, currentMA).slice(startIdx);
+
+    const visAir    = rawAir.slice(startIdx);
+    const visMedian = rawMedian.slice(startIdx);
+    const visPlan   = rawPlan.slice(startIdx);
+    const visShip   = rawShip.slice(startIdx);
+
+    // 1. AIRCRAFT CHART
+    document.getElementById('air-sub').textContent =
+      'Trailing ' + currentMA + '-day rolling average' + (showDaily ? ' over daily sortie counts' : '');
+
+    const airTraces = [];
+    if (showDaily) {
+      airTraces.push({
+        x: visDates,
+        y: visAir,
+        type: 'bar',
+        name: 'Daily sorties',
+        marker: { color: p.airBar, line: { width: 0 } },
+        hovertemplate: 'Daily: <b>%{y}</b><extra></extra>',
+      });
+    }
+    airTraces.push({
+      x: visDates,
+      y: maAir,
+      type: 'scatter',
+      mode: 'lines',
+      name: currentMA + 'd avg',
+      line: { color: p.air, width: 2.75, shape: 'spline', smoothing: 0.45 },
+      fill: 'tozeroy',
+      fillcolor: p.airFill,
+      hovertemplate: currentMA + 'd avg: <b>%{y:.1f}</b><extra></extra>',
     });
+    if (hasMedian) {
+      airTraces.push({
+        x: visDates,
+        y: maMedian,
+        type: 'scatter',
+        mode: 'lines',
+        name: 'Median line (' + currentMA + 'd)',
+        line: { color: p.median, width: 2, dash: 'dot' },
+        hovertemplate: 'Median line: <b>%{y:.1f}</b><extra></extra>',
+      });
+    }
+
+    // Period mean reference & peak callout
+    const airStats = windowAvg(baseAir, startIdx, rows.length - 1);
+    const airShapes = [];
+    const airAnnotations = [];
+    if (airStats) {
+      airShapes.push({
+        type: 'line',
+        xref: 'paper', x0: 0, x1: 1,
+        yref: 'y', y0: airStats.avg, y1: airStats.avg,
+        line: { color: p.refLine, width: 1, dash: 'dot' },
+      });
+      airAnnotations.push({
+        xref: 'paper', x: 1, xanchor: 'right',
+        yref: 'y', y: airStats.avg, yanchor: 'bottom', yshift: 3,
+        text: 'Period avg ' + airStats.avg.toFixed(1),
+        showarrow: false,
+        font: { size: 11, color: p.textDim },
+      });
+    }
+    let pkVal = -1, pkIdx = -1;
+    for (let i = 0; i < visAir.length; i++) {
+      if (visAir[i] != null && visAir[i] > pkVal) { pkVal = visAir[i]; pkIdx = i; }
+    }
+    if (showDaily && pkIdx >= 0 && pkVal >= 25) {
+      airAnnotations.push({
+        x: visDates[pkIdx],
+        y: pkVal,
+        text: '<b>' + pkVal + '</b> · ' + formatDateShort(visDates[pkIdx]),
+        showarrow: true,
+        arrowhead: 0,
+        arrowwidth: 1,
+        arrowcolor: p.refLine,
+        ax: pkIdx > visDates.length * 0.72 ? -55 : 55,
+        ay: -22,
+        font: { size: 11, color: p.text },
+        bgcolor: p.hoverBg,
+        bordercolor: p.hoverBorder,
+        borderwidth: 1,
+        borderpad: 4,
+      });
+    }
+
+    const airLegend = [
+      { kind: 'line', color: p.air, label: currentMA + 'd trend' },
+    ];
+    if (showDaily) airLegend.push({ kind: 'bar', color: p.airBar, label: 'Daily sorties' });
+    if (hasMedian) airLegend.push({ kind: 'line', color: p.median, label: 'Median crossings' });
+    renderInlineLegend('air-legend', airLegend);
+
+    Plotly.react(
+      'chart-air',
+      airTraces,
+      baseLayout(p, {
+        bargap: 0.15,
+        shapes: airShapes,
+        annotations: airAnnotations,
+      }),
+      plotConfig
+    );
+
+    // 2. MARITIME CHART (PLAN Vessels + Official Ships)
+    document.getElementById('sea-sub').textContent =
+      'Trailing ' + currentMA + '-day rolling average · dedicated scale reveals naval & coast guard shifts';
+
+    const seaTraces = [];
+    if (showDaily) {
+      seaTraces.push({
+        x: visDates,
+        y: visPlan,
+        type: 'bar',
+        name: 'PLAN daily',
+        marker: { color: p.planBar, line: { width: 0 } },
+        hovertemplate: 'PLAN daily: <b>%{y}</b><extra></extra>',
+      });
+      seaTraces.push({
+        x: visDates,
+        y: visShip,
+        type: 'bar',
+        name: 'Official daily',
+        marker: { color: p.shipBar, line: { width: 0 } },
+        hovertemplate: 'Official daily: <b>%{y}</b><extra></extra>',
+      });
+    }
+    seaTraces.push({
+      x: visDates,
+      y: maPlan,
+      type: 'scatter',
+      mode: 'lines',
+      name: 'PLAN vessels (' + currentMA + 'd)',
+      line: { color: p.plan, width: 2.6, shape: 'spline', smoothing: 0.45 },
+      hovertemplate: 'PLAN ' + currentMA + 'd avg: <b>%{y:.1f}</b><extra></extra>',
+    });
+    seaTraces.push({
+      x: visDates,
+      y: maShip,
+      type: 'scatter',
+      mode: 'lines',
+      name: 'Official ships (' + currentMA + 'd)',
+      line: { color: p.ship, width: 2.6, shape: 'spline', smoothing: 0.45 },
+      hovertemplate: 'Official ' + currentMA + 'd avg: <b>%{y:.1f}</b><extra></extra>',
+    });
+
+    renderInlineLegend('sea-legend', [
+      { kind: 'line', color: p.plan, label: 'PLAN vessels (' + currentMA + 'd)' },
+      { kind: 'line', color: p.ship, label: 'Official ships (' + currentMA + 'd)' },
+    ]);
+
+    Plotly.react(
+      'chart-sea',
+      seaTraces,
+      baseLayout(p, {
+        barmode: 'overlay',
+        bargap: 0.15,
+      }),
+      plotConfig
+    );
+
+    // 3. ADIZ QUADRANT BREAKDOWN (Monthly stacked bars)
+    const adizDefs = [
+      ['sw_adiz', 'Southwest ADIZ'],
+      ['e_adiz',  'East ADIZ'],
+      ['n_adiz',  'North ADIZ'],
+      ['se_adiz', 'Southeast ADIZ'],
+    ].filter(([k]) => headerCols.includes(k));
+
+    // Aggregate visible range by YYYY-MM
+    const monthMap = new Map();
+    for (let i = startIdx; i < rows.length; i++) {
+      const ym = rows[i].date.slice(0, 7);
+      if (!monthMap.has(ym)) {
+        const bucket = {};
+        adizDefs.forEach(([k]) => { bucket[k] = 0; });
+        monthMap.set(ym, bucket);
+      }
+      const bucket = monthMap.get(ym);
+      adizDefs.forEach(([k]) => {
+        const v = asNum(rows[i][k]);
+        if (v != null) bucket[k] += v;
+      });
+    }
+    const months = Array.from(monthMap.keys()).sort();
+    const adizHasAny = months.some(m => adizDefs.some(([k]) => monthMap.get(m)[k] > 0));
+
+    const adizEl = document.getElementById('chart-adiz');
+    if (!adizHasAny) {
+      document.getElementById('adiz-legend').innerHTML = '';
+      Plotly.purge(adizEl);
+      adizEl.innerHTML =
+        '<p style="color:var(--text-muted);padding:1.25rem 0;margin:0;font-size:0.88rem;">No per-quadrant ADIZ counts reported in this date range.</p>';
+    } else {
+      if (adizEl.querySelector('p')) adizEl.innerHTML = '';
+      const adizTraces = adizDefs.map(([k, name]) => ({
+        x: months.map(m => m + '-01'),
+        y: months.map(m => monthMap.get(m)[k] || 0),
+        type: 'bar',
+        name,
+        marker: { color: p.adiz[k], line: { width: 0 } },
+        hovertemplate: name + ': <b>%{y}</b><extra></extra>',
+      }));
+
+      renderInlineLegend(
+        'adiz-legend',
+        adizDefs.map(([k, name]) => ({ kind: 'bar', color: p.adiz[k], label: name }))
+      );
+
+      Plotly.react(
+        adizEl,
+        adizTraces,
+        baseLayout(p, {
+          barmode: 'stack',
+          bargap: 0.28,
+          xaxis: {
+            type: 'date',
+            showgrid: false,
+            zeroline: false,
+            linecolor: p.zero,
+            linewidth: 1,
+            tickfont: { color: p.textDim, size: 11 },
+            tickformat: '%b %Y',
+            hoverformat: '%b %Y',
+          },
+        }),
+        plotConfig
+      );
+    }
   }
 
-  var totalsDiv = document.getElementById('totals');
-  Plotly.newPlot(totalsDiv, totalsData, { ...layoutBase }, { responsive: true, displaylogo: false });
-  attachAutoY(totalsDiv, false);
+  // ---- Wire Controls ----
+  document.getElementById('range-seg').addEventListener('click', e => {
+    const btn = e.target.closest('button[data-range]');
+    if (!btn) return;
+    currentRange = btn.dataset.range;
+    document.querySelectorAll('#range-seg button').forEach(b => b.classList.toggle('active', b === btn));
+    renderAll();
+  });
 
-  const adizSeries = [
-    ['n_adiz',  'North ADIZ'],
-    ['sw_adiz', 'Southwest ADIZ'],
-    ['e_adiz',  'East ADIZ'],
-    ['se_adiz', 'Southeast ADIZ'],
-  ];
-  const adizData = adizSeries
-    .filter(([k]) => headerCols.includes(k))
-    .map(([k, name]) => ({
-      x: dates,
-      y: rows.map(r => asNum(r[k])),
-      stackgroup: 'one',
-      type: 'scatter', mode: 'lines',
-      name,
-      hovertemplate: '%{x}<br>' + name + ': %{y}<extra></extra>',
-    }));
-  const hasAdiz = adizData.some(s => s.y.some(v => v != null));
-  if (!hasAdiz) {
-    document.getElementById('adiz').innerHTML =
-      '<p style="color:#8a93a6;padding:.75rem">ADIZ per-quadrant breakdowns not available for the current dataset (MND stopped reporting per-quadrant counts in late January 2024).</p>';
-  } else {
-    var adizDiv = document.getElementById('adiz');
-    Plotly.newPlot(adizDiv, adizData, { ...layoutBase }, { responsive: true, displaylogo: false });
-    attachAutoY(adizDiv, true);
-  }
+  document.getElementById('ma-seg').addEventListener('click', e => {
+    const btn = e.target.closest('button[data-ma]');
+    if (!btn) return;
+    currentMA = parseInt(btn.dataset.ma, 10);
+    document.querySelectorAll('#ma-seg button').forEach(b => b.classList.toggle('active', b === btn));
+    renderAll();
+  });
+
+  document.getElementById('show-daily').addEventListener('change', e => {
+    showDaily = e.target.checked;
+    renderAll();
+  });
+
+  document.getElementById('theme-toggle').addEventListener('click', () => {
+    applyTheme(theme === 'dark' ? 'light' : 'dark');
+    renderAll();
+  });
+
+  renderAll();
 })();
 </script>
 </body>
